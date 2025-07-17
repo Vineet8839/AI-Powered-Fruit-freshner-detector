@@ -1,0 +1,67 @@
+import os
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
+from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
+
+# Paths
+data_dir = 'Dataset/'  # Path to folder with subfolders for each class
+image_size = 224
+batch_size = 32
+
+# Data Preprocessing
+datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=20,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    validation_split=0.2
+)
+
+train_gen = datagen.flow_from_directory(
+    data_dir,
+    target_size=(image_size, image_size),
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='training'
+)
+
+val_gen = datagen.flow_from_directory(
+    data_dir,
+    target_size=(image_size, image_size),
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='validation'
+)
+
+# Load Pretrained Base Model
+base_model = MobileNetV2(include_top=False, input_shape=(image_size, image_size, 3), weights='imagenet')
+base_model.trainable = False
+
+# Add custom layers
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dense(128, activation='relu')(x)
+output = Dense(train_gen.num_classes, activation='softmax')(x)
+
+model = Model(inputs=base_model.input, outputs=output)
+model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Model Training
+history = model.fit(train_gen, validation_data=val_gen, epochs=10)
+
+# Save Model
+model.save("fruit_freshness_model.h5")
+
+# Accuracy Plot
+plt.plot(history.history['accuracy'], label='Training Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.legend()
+plt.title("Model Accuracy Over Epochs")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.show()
